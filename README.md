@@ -33,7 +33,7 @@ contains tools for plotting from https://uk.mathworks.com/matlabcentral/fileexch
 contains scripts for operations with matrices: *mat2bldiag.m*.
 
 ###### ./Methods
-contains scripts that implement generic reconstruction methods: *build1DFTM.m*, *buildStandardDFTM.m*, *fftGPU.m*, *generateGrid.m*, *ifftGPU.m*, *plugNoise.m*, *resampling.m*, *ridgeDetection.m*, *spaNeigh.m*.
+contains scripts that implement generic methods for reconstruction: *build1DFTM.m*, *buildStandardDFTM.m*, *fftGPU.m*, *generateGrid.m*, *ifftGPU.m*, *plugNoise.m*, *resampling.m*, *ridgeDetection.m*, *spaNeigh.m*.
 
 ###### ./Shrinkage
 contains scripts for SVD shrinkage: *frobenius.m*, *generalShrinkage.m*, *hard.m*, *operator.m*, *percMarcenkoPastur.m*, *stieltjes.m*, *stieltjesSimulated.m*, *veraart.m*.
