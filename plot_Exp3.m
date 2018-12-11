@@ -5,7 +5,7 @@
 
 addpath(genpath('.'));
 pathData='../complexSVDShrinkageDWIData';
-load(fullfile(pathData,'recFig05.mat'),'y','voxsiz');
+load(fullfile(pathData,'recFig05b.mat'),'y','voxsiz');
 load(fullfile(pathData,'retFig05.mat'),'xv');
 
 genericFigInformation;

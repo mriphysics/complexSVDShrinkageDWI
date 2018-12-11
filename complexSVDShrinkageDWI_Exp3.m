@@ -16,7 +16,8 @@ if parR.Verbosity>0
     fprintf('Experiment using a general noise model / differences when phase correcting\n');
     fprintf('Reading input data...\n');
 end
-load(fullfile(pathData,'recFig05.mat'));
+load(fullfile(pathData,'recFig05a.mat'));
+load(fullfile(pathData,'recFig05b.mat'));
 if parR.Verbosity>0;fprintf('Finished reading input data\n');end
 
 %EXPERIMENT PARAMETERS
