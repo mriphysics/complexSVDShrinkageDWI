@@ -39,7 +39,7 @@ contains scripts that implement generic methods for reconstruction: *build1DFTM.
 contains scripts for SVD shrinkage: *frobenius.m*, *generalShrinkage.m*, *hard.m*, *operator.m*, *percMarcenkoPastur.m*, *stieltjes.m*, *stieltjesSimulated.m*, *veraart.m*.
 
 
-NOTE 1: Exemplary data is provided in the datasets *recFig0[4,5,8].mat*. For runs without changing the paths, they should be placed in a folder
+NOTE 1: Exemplary data is provided in the datasets *recFig0[4,5a,5b,8].mat*. For runs without changing the paths, they should be placed in a folder
 ###### ../complexSVDShrinkageDWIData
 Data generated when running the scripts is also stored in this folder as *retFig0[4,5,8].mat*.
 
