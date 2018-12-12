@@ -1,4 +1,4 @@
-function esd=ESDMixAndMix(C,N,tolEnd,NL,tolMinEig,indbldiag,tolSta,factCool,M,tolUnique,nMax)
+function esd=ESDMixAndMix(C,N,tolEnd,NL,tolMinEig,indbldiag,tolSta,factCool,Q,tolUnique,nMax)
 
 %ESDMIXANDMIX  computes the ESD using fixed point iterations on a given 
 %covariance matrix. It generalizes the Spectrode code in [1] E Dobriban, 
@@ -17,7 +17,7 @@ function esd=ESDMixAndMix(C,N,tolEnd,NL,tolMinEig,indbldiag,tolSta,factCool,M,to
 %procedures for nonlinear integral equations," J ACM, 12:537-560, 1965 is 
 %used to accelerate convergence of the fixed point equations; [4] adaptive 
 %gridding is used for better approximation at the egdes of the ESD.
-%   ESD=ESDMIXANDMIX(C,N,{TOLEND},{TOLMINEIG},{PERCSAM}{INDBLDIAG},{TOLSTA},{FACTCOOL},{M},{TOLUNIQUE})
+%   ESD=ESDMIXANDMIX(C,N,{TOLEND},{TOLMINEIG},{INDBLDIAG},{TOLSTA},{FACTCOOL},{M},{TOLUNIQUE})
 %   * C is an MxMxOxI array containing the MxM population covariance 
 %   (alternatively a Mx1 diagonal population covariance) for O distinct
 %   items of the problem (patches in the context of DWI signal prediction)
@@ -30,16 +30,16 @@ function esd=ESDMixAndMix(C,N,tolEnd,NL,tolMinEig,indbldiag,tolSta,factCool,M,to
 %   Defaults to 1
 %   * {TOLMINEIG} is the minimum allowed eigenvalue, the covariance matrix
 %   is regularized by this value to guarantee positive definiteness.
-%   Defaults to 1e-3. A small value generally helps to stabilize the estimates
+%   Defaults to 0. A small value may help to stabilize the estimates
 %   * {INDBLDIAG} indicates the independence structure of the matrices
 %   (sizes of independent block diagonal submatrices) to accelerate
 %   computations. Defaults to empty
 %   * {TOLSTA} is the starting error tolerance where to start homotopy in
 %   the imaginary direction. Defaults to 1
 %   * {FACTCOOL} is the factor for homotopy cooling in the complex plane.
-%   Defaults to 2
-%   * {M} is the number of iterations for Anderson mixing (0 does not use 
-%   Andersson mixing). Defaults to 3
+%   Defaults to 10
+%   * {Q} is the number of iterations for Anderson mixing (0 does not use 
+%   Andersson mixing). Defaults to 2
 %   * {TOLUNIQUE} is the tolerance to group population eigenvalues, 
 %   defaults to 0
 %   * {NMAX} is the maximum number of iterations of fixed point. It
@@ -57,15 +57,13 @@ function esd=ESDMixAndMix(C,N,tolEnd,NL,tolMinEig,indbldiag,tolSta,factCool,M,to
 
 if nargin<3 || isempty(tolEnd);tolEnd=1e-4;end
 if nargin<4 || isempty(NL);NL=1;end
-if nargin<5 || isempty(tolMinEig);tolMinEig=1e-3;end
+if nargin<5 || isempty(tolMinEig);tolMinEig=0;end%Setting this to a low value may help for singularities at 0
 if nargin<6;indbldiag=[];end
 if nargin<7 || isempty(tolSta);tolSta=1;end
 if nargin<8 || isempty(factCool);factCool=10;end%10;end%It seems it may be feasible to run it with a factCool of 10, but more tests are required. We are being really aggressive due to the nature of our application, reduce this to 2 for more reliable estimates
-if nargin<9 || isempty(M);M=2;end%This may probably be something along min(C(4)/2,Mmax)
+if nargin<9 || isempty(Q);Q=2;end%This may probably be something along min(C(4)/2,Mmax)
 if nargin<10 || isempty(tolUnique);tolUnique=0;end%1e-2;end
 if nargin<11 || isempty(nMax);nMax=100;end
-
-%[C,N,tolEnd,tolSta]=parUnaFun({C,N,tolEnd,tolSta},@double);
 
 gpu=isa(C,'gpuArray');
 
@@ -124,6 +122,7 @@ else
     eigG=cat(1,eigG,eigm(mean(C,4)));
 end
 gridx=startingGrid(eigG,Beta,N0,Nin,Nfu);
+
 perm=1:5;perm(1)=5;perm(5)=1;%Generic permutation
 gridx=permute(gridx,perm);
 
@@ -139,8 +138,8 @@ if gpu;tolSta=gpuArray(tolSta);end
 %BLOCK DIAGONAL ACCELERATION
 if ~isempty(indbldiag) && NC(4)~=1
     ce=length(indbldiag);
-    C=mat2bldiag(C,indbldiag);
-    IdM=mat2bldiag(IdM,indbldiag);
+    C=mat2bldiagGPU(C,indbldiag);
+    IdM=mat2bldiagGPU(IdM,indbldiag);
 else
     ce=0;
 end
@@ -150,9 +149,9 @@ for l=1:NL%For each resolution level
     
     %GRIDS AT THIS RESOLUTION LEVEL
     if l>1
-        [gridxPre,densPre]=parUnaFun({gridxPre,densPre},@permute,perm);
+        gridxPre=permute(gridxPre,perm);densPre=permute(densPre,perm);
         gridx=nonUniformGridAddPoints(gridxPre,densPre,round(NP*NS(l-1)),typGrid);
-        [gridxPre,densPre,gridx]=parUnaFun({gridxPre,densPre,gridx},@permute,perm); 
+        gridxPre=permute(gridxPre,perm);densPre=permute(densPre,perm);gridx=permute(gridx,perm);
     end
     
     permG=1:5;permG(numDims(gridx))=5;permG(5)=numDims(gridx);
@@ -164,22 +163,22 @@ for l=1:NL%For each resolution level
         v=-1./(Beta*grid);
         v=repmat(v,repPop);
     else%if l==2%Linear interpolation  
-        [gridPreU,gridCur,v]=parUnaFun({gridxPre,gridx,vPre},@permute,perm);
-        [gridPreU,gridCur]=parUnaFun({gridPreU,gridCur},@repmat,repPop);                
-                
+        gridPreU=permute(gridxPre,perm);gridCur=permute(gridx,perm);v=permute(vPre,perm);
+        gridPreU=repmat(gridPreU,repPop);gridCur=repmat(gridCur,repPop);
+               
         NG=size(gridPreU);
-        NGG=prod(NG(2:end));        
-        [gridPreU,v]=parUnaFun({gridPreU,v},@reshape,[NG(1) NGG]);        
+        NGG=prod(NG(2:end));  
+        gridPreU=reshape(gridPreU,[NG(1) NGG]);v=reshape(v,[NG(1) NGG]);
         gridCur=reshape(gridCur,[NP NGG]);
         vO=interp1GPU(gridPreU,v,gridCur);
         v=reshape(vO,[NP NG(2:end)]);v=permute(v,perm);
     end         
 
-    ffgg=repmat(grid,[2 M+1 1 NC(4)]);
+    ffgg=repmat(grid,[2 Q+1 1 NC(4)]);
     NGG=size(grid,5);
     
-    [ffgg,v]=parUnaFun({ffgg,v},@permute,[1 2 3 5 4]);
-    ffgg=reshape(ffgg,[2 M+1 NC(3)*NGG NC(4)]);
+    ffgg=permute(ffgg,[1 2 3 5 4]);v=permute(v,[1 2 3 5 4]);
+    ffgg=reshape(ffgg,[2 Q+1 NC(3)*NGG NC(4)]);
     
     grid=reshape(grid,[1 1 NC(3)*NGG]);
     v=reshape(v,[1 1 NC(3)*NGG NC(4)]);
@@ -188,7 +187,7 @@ for l=1:NL%For each resolution level
     convItem=logical(gather(tolSta));convItem(:)=false;%Flag to compute
     errpre=tolSta;errpre(:)=inf;
     
-    if NC(4)==1 && grEig;[eigvtolC,weigvtolC,weigeigvtolC]=parUnaFun({eigvtol,weigvtol,weigeigvtol},@repmat,[1 1 NGG]);
+    if NC(4)==1 && grEig;eigvtolC=repmat(eigvtol,[1 1 NGG]);weigvtolC=repmat(weigvtol,[1 1 NGG]);weigeigvtolC=repmat(weigeigvtol,[1 1 NGG]);
     elseif NC(4)==1;eigvC=repmat(eigv,[1 1 NGG]);
     else
         if ce
@@ -215,7 +214,7 @@ for l=1:NL%For each resolution level
         ffggi=ffgg(:,:,convItemF,:);vi=v(:,:,convItemF,:);gridi=grid(:,:,convItemF);
         %FIXED POINT EQUATIONS        
         if NC(4)==1
-            if exist('weigvtol','var')
+            if grEig
                 vni=sum(bsxfun(@rdivide,weigeigvtolC(:,:,convItemF),bsxfun(@minus,bsxfun(@rdivide,eigvtolC(:,:,convItemF),1+Beta*vi),gridi)),1);%There are some numerical differences with the next case due to the application of the mean (specially for single data)
             else
                 eigvi=eigvC(:,:,convItemF);
@@ -237,9 +236,9 @@ for l=1:NL%For each resolution level
             end
         end
         %ANDERSON MIXING
-        ffggi(2,M+1,:,:)=vni;
-        Mi=min(M,n);
-        [ffggi,vni]=andersonMixing(ffggi,vi,Mi);        
+        ffggi(2,Q+1,:,:)=vni;
+        Qi=min(Q,n);
+        [ffggi,vni]=andersonMixing(ffggi,vi,Qi);        
         ffgg(:,:,convItemF,:)=ffggi;v(:,:,convItemF,:)=vi;vn(:,:,convItemF,:)=vni;   
         %CONVERGENCE 
         vnic=imag(vn)<0;vnic=find(vnic);
@@ -287,15 +286,15 @@ for l=1:NL%For each resolution level
     else
         gridxPre=cat(5,gridxPre,gridx);densPre=cat(5,densPre,dens);vPre=cat(5,vPre,v);
         [gridxPre,iSGr]=sort(gridxPre,5);
-        [densPre,vPre]=parUnaFun({densPre,vPre},@indDim,iSGr,5);
+        densPre=indDim(densPre,iSGr,5);vPre=indDim(vPre,iSGr,5);
     end    
     %fprintf('Number of iterations in level %d: %d\n',l,n);
     %fprintf('Tolerance achieved in level %d: %.1e\n',l,max(tolUse(:)));
 end
 
 %ASSIGNMENT
-[esd.grid,esd.dens]=parUnaFun({gridxPre,abs(densPre)},@permute,[5 2 3 4 1]);
-[esd.grid,esd.dens]=parUnaFun({esd.grid,esd.dens},@single);
+esd.grid=single(permute(gridxPre,[5 2 3 4 1]));
+esd.dens=single(permute(abs(densPre),[5 2 3 4 1]));
 
 %UPPER THRESHOLD ESTIMATE
 NP=size(esd.dens,1);

@@ -27,10 +27,8 @@ BetaLim=(Fact.^pm).*(1+pm.*sqrt(Beta)).^2;
 eigv=sort(eigv,1);
 M=size(eigv,1);
 
-grAd=bsxfun(@times,BetaLim,eigv);
-grAd=gather(grAd);
-
-grDi=gather(grAd(1:end-1,2,:)<grAd(2:end,1,:));%These are zones we initially guess are not on the support
+grAd=gather(bsxfun(@times,BetaLim,eigv));
+grDi=(grAd(1:end-1,2,:)<grAd(2:end,1,:));%These are zones we initially guess are not on the support
 
 NS=size(grDi,3);
 indBr=cell(1,NS);
@@ -43,13 +41,12 @@ end
 %THE GRID IS ADAPTED TO THE DETECTED SUPPORT INTERVALS (UNIFORM AND WITH
 %DENSITY GOVERNED BY NUMBER OF POINTS SO AS TO BALANCE RELATIVE WEIGHTS)
 %IMPROVED DETECTION OF SMALL COMPONENTS BY OPERATING ON A LOGARITHMIC SCALE
-gridx=zeros([max(NG) 1 NS],'like',eigv);%We book memory with precomputed size of the grid
-gridx=gather(gridx);
+gridx=zeros([max(NG) 1 NS],'like',grAd);%We book memory with precomputed size of the grid
 for s=1:NS
     cont=0;
     for n=1:length(indBr{s})-1
         NP=max(round(Nfu*N0*(indBr{s}(n+1)-indBr{s}(n))/M),Nin);
-        gridx(cont+1:cont+NP,1,s)=gather(exp(linspace(log(grAd(indBr{s}(n)+1,1,s)),log(grAd(indBr{s}(n+1),2,s)),NP)));
+        gridx(cont+1:cont+NP,1,s)=exp(linspace(log(grAd(indBr{s}(n)+1,1,s)),log(grAd(indBr{s}(n+1),2,s)),NP));
         cont=cont+NP;
     end
     if NG(s)<max(NG)%We fill by homogeneously distributing points

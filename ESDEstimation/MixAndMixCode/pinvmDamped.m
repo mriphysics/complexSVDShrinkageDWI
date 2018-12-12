@@ -5,18 +5,21 @@ function X=pinvmDamped(X,tol,b)
 %   X=PINVMDAMPED(X,{TOL})
 %   * X is the input matrix
 %   * {TOL} is a tolerance for singular value truncation. It defaults to 
-%   MAX(M,N) * NORM(X(:,:)) * EPS(class(X)), with M and N the numbers of
-%   rows and columns in X
+%   1e-8 (very small)
 %   * {B} is the array onto which to perform the pseudoinverse
 %   * X is the resulting pseudoinverse
 %
 
-if ~exist('tol','var');tol=[];end
+if nargin<2;tol=1e-8;end
 
 NX=size(X);NX(end+1:3)=1;
-NDX=numDims(X);
-[X,NXP]=resSub(X,3:NDX);NXP(end+1:3)=1;
-if exist('b','var');b=resSub(b,3:NDX);end
+NXr=[NX(1:2) prod(NX(3:end))];
+X=reshape(X,NXr);
+if nargin>=3
+    NB=size(b);NB(end+1:3)=1;
+    NBr=[NB(1:2) prod(NB(3:end))];
+    b=reshape(b,NBr);
+end
 
 NXmin=min(NX(1:2));
 %I=tol*bsxfun(@times,eye(NXmin,'like',X),multDimMax(abs(X),1:2).^2);
@@ -48,5 +51,4 @@ else
         X=matfun(@mldivide,I,emtimes(Xp,b));
     end    
 end
-
-X=resSub(X,3,NX(3:end));
+X=resSub(X,3,NX(3:end));%This instruction may be accelerated

@@ -9,16 +9,16 @@ The code has been developed in MATLAB and has the following structure:
 contains the scripts for running the experiments included respectively in Figs. 4, 8 and 5 of the manuscript: *complexSVDShrinkageDWI_Exp[1-3].m*, generate part of the graphical materials included in the Figs.: *plot_Exp[1-3].m*, call the patch-based traversal: *patchSVShrinkage.m* and perform SVD shrinkage: *SVShrinkage.m*.
 
 ###### ./Build
-contains scripts that replace, extend or adapt some MATLAB built-in functions: *diagm.m*, *dynInd.m*, *eigm.m*, *emtimes.m*, *ind2subV.m*, *matfun.m*, *multDimMax.m*, *numDims.m*, *parUnaFun.m*, *resPop.m*, *resSub.m*, *sub2indV.m*, *svdm.m*.
+contains scripts that replace, extend or adapt some MATLAB built-in functions: *diagm.m*, *dynInd.m*, *eigm.m*, *emtimes.m*, *ind2subV.m*, *indDim.m*, *matfun.m*, *multDimMax.m*, *multDimSum.m*, *numDims.m*, *parUnaFun.m*, *resPop.m*, *resSub.m*, *sub2indV.m*, *svdm.m*.
 
 ###### ./ESDEstimation
-contains scripts for empirical sample distribution estimation: *ESDMixAndMix.m*, *ESDSimulated.m*, *ESDSpectrode.m*.
+contains scripts for empirical sample distribution computation: *ESDMixAndMix.m*, *ESDSimulated.m*, *ESDSpectrode.m*.
 
 ###### ./ESDEstimation/MixAndMixCode
-contains scripts that implement the MidAndMix ESD estimation method in the manuscript ''Numerical techniques for the computation of sample spectral distributions of population mixtures'', L Cordero-Grande. Unpublished: *addCorrelation.m*, *andersonMixing.m*, *arraySupport.m*, *fillGridPoints.m*, *gridSubdivide.m*, *interp1GPU.m*, *nonUniformGridAddPoints.m*, *pinvmDamped.m*, *plotObjective.m*, *startingGrid.m*.
+contains scripts that implement the MidAndMix ESD computation method in the manuscript ''Numerical techniques for the computation of sample spectral distributions of population mixtures'', L Cordero-Grande. Unpublished: *andersonMixing.m*, *arraySupport.m*, *fillGridPoints.m*, *gridSubdivide.m*, *interp1GPU.m*, *nonUniformGridAddPoints.m*, *pinvmDamped.m*, *startingGrid.m*.
 
 ###### ./ESDEstimation/SpectrodeCode
-contains scripts that implement the Spectrode ESD estimation method in the manuscript ''Efficient computation of limit spectra of sample covariance matrices'', E Dobriban, Rand. Matr. Th. Appl., 2015, 4(4):1550019:1-36 from https://github.com/dobriban/EigenEdge/
+contains scripts that implement the Spectrode ESD computation method in the manuscript ''Efficient computation of limit spectra of sample covariance matrices'', E Dobriban, Rand. Matr. Th. Appl., 2015, 4(4):1550019:1-36 from https://github.com/dobriban/EigenEdge/
 
 ###### ./Figures
 contains scripts for generating the graphical materials: *genericFigInformation.m*.

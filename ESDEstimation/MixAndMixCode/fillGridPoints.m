@@ -34,7 +34,7 @@ xoi=cat(1,xo(indxN)',xo(indxN+1)');
 
 if ~isempty(subxN)
     xoi=permute(xoi,[1 3 2]);
-    c=unique(subxN);
+    c=uniquetol(subxN);
     subxNista=1+cumsum(subxN-1);
     subxNista=[1;subxNista(1:end-1)];
 

@@ -9,7 +9,7 @@ function [esd,nou]=ESDSimulated(C,N,tolMinEig,NR)
 %   equal than 1
 %   * {TOLMINEIG} is the minimum allowed eigenvalue, the covariance matrix
 %   is regularized by this value to guarantee positive definiteness.
-%   Defaults to 1e-3. It generally helps to stabilize the estimates
+%   Defaults to 0. A small value may help to stabilize the estimates
 %   * {NR} is the number of realizations of the matrix (block-diagonally 
 %   extended). Defaults to 1
 %   * ESD is an array of size Mx1xO containing the synthesized eigenvalues
@@ -17,7 +17,7 @@ function [esd,nou]=ESDSimulated(C,N,tolMinEig,NR)
 %   * NOU contains the synthesized noise samples
 %
 
-if nargin<3 || isempty(tolMinEig);tolMinEig=1e-3;end
+if nargin<3 || isempty(tolMinEig);tolMinEig=0;end%Setting this to a low value may help for singularities at 0
 if nargin<4 || isempty(NR);NR=1;end
 
 gpu=isa(C,'gpuArray');
@@ -82,7 +82,7 @@ parfor(o=1:size(Cin,3),parforFl)
     %for r=1:NR-1;Uaux=blkdiag(Uaux,Uor);Daux=blkdiag(Daux,Dor);end 
     U(:,:,o)=Uaux;D(:,:,o)=Daux;    
 end
-if gpu;[U,D]=parUnaFun({U,D},@gpuArray);end
+if gpu;U=gpuArray(U);D=gpuArray(D);end
 D=sqrt(abs(diagm(D)));
 
 U=bsxfun(@times,U,D);

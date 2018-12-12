@@ -34,7 +34,7 @@ gpu=isa(x,'gpuArray');
 
 NPG=size(x);
 resV=[NPG(1) prod(NPG(2:end))];
-[x,y]=parUnaFun({x,y},@reshape,resV);
+x=reshape(x,resV);y=reshape(y,resV);
 NPGR=size(x);
 %FIRST ORDER DERIVATIVES
 xd=diff(x,1,1);
@@ -46,14 +46,13 @@ if strcmp(typGrid,'Campylotropic') || strcmp(typGrid,'SecondExpect')
     xdd=diff(xd,1,1);
     ydd=diff(yd,1,1)./xdd;
     xdd=xd(1:end-1,:)+xdd/2;
-    ydd=padarray(ydd,[1 0],0);
+    padEl=zeros([1 size(x,2)],'like',ydd);
+    ydd=vertcat(padEl,ydd,padEl);
     xdd=vertcat(x(1,:),xdd,x(end,:));
     %INTERPOLATION OVER THE FIRST DERIVATIVE GRID
     yddi=interp1GPU(xdd,ydd,xd);
 end
-%INTERPOLATION OVER THE FIRST DERIVATIVE GRID
-%yi=yd;
-%for o=1:NPGR(2);yi(:,o)=interp1(x(:,o),y(:,o),xd(:,o),'linear',0);end
+
 %WEIGHT DEFINITION
 w=yd;
 if strcmp(typGrid,'Uniform')
@@ -65,22 +64,16 @@ elseif strcmp(typGrid,'Campylotropic')
     w=w.*(1+parGrid*abs(yddi)./w.^3);
 elseif strcmp(typGrid,'SecondExpect')
     w=sqrt((abs(yddi).*xd));
-    %w=abs(yddi);
-    %w=(abs(yddi).^parGrid).*(xd.^(1-parGrid));
 elseif strcmp(typGrid,'Expect')
     w=xd;
 end
-w=w.*xdw;
-%w=(abs(ydd).^Beta).*(x.^(1-Beta));
-w=gather(w);
+w=gather(w.*xdw);
 
 %SUBDIVISION OF GRID CELLS
-subx=gridSubdivide(w,NP);
-
-[x,subx]=parUnaFun({x,subx},@gather);
+subx=gather(gridSubdivide(w,NP));
+x=gather(x);
 
 %CREATION OF NEW GRID POINTS
 xN=fillGridPoints(x,subx,NP);
-
 if gpu;xN=gpuArray(xN);end
 xN=reshape(xN,[NP NPG(2:end)]);

@@ -11,16 +11,16 @@ function indS=arraySupport(x,tol,ext,typ)
 %   % INDS are the indexes of support
 %
 
-if ~exist('tol','var') || isempty(tol);tol=0;end
-if ~exist('ext','var') || isempty(ext);ext=0;end
-if ~exist('typ','var') || isempty(typ);typ=1;end
+if nargin<2 || isempty(tol);tol=0;end
+if nargin<3 || isempty(ext);ext=0;end
+if nargin<4 || isempty(typ);typ=1;end
 
 x=(abs(x)>tol);
 [~,thI]=max(x,[],1);
 [~,thS]=max(flip(x,1),[],1);
 N=size(x);
 thS=N(1)-thS+1;
-[thI,thS]=parUnaFun({thI,thS},@double);
+thI=double(thI);thS=double(thS);
 thII=max(thI-ext,1);
 thSS=min(thS+ext,N(1));
 indS=vertcat(thII,thSS);

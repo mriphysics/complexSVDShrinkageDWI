@@ -19,7 +19,7 @@ if ~typ
     Vq=Xq;
     for p=1:N(2);Vq(:,p)=interp1(X(:,p),V(:,p),Xq(:,p),'linear',0);end
 else
-    [X,Xq]=parUnaFun({X,Xq},@double);
+    X=double(X);Xq=double(Xq);
     Next=N(1)/(N(1)-1);
     Xor=X(1,:);%Origin
     X=bsxfun(@minus,X,Xor);%Reference to origin

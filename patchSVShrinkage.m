@@ -209,8 +209,8 @@ for ns=1:Nsweeps
                     tsta=tic;
                 end                                              
                 if strcmp(parR.NoiEstMeth,'None') || parR.ESDMeth==3
-                    if parR.ESDMeth==2;esd=ESDMixAndMix(Lambda,N,parR.ESDTol,2,[],indbldiag);
-                    elseif parR.ESDMeth==1 && size(Lambda,4)==1;esd=ESDSpectrode(Lambda,M/N,parR.ESDTol);
+                    if parR.ESDMeth==2;esd=ESDMixAndMix(Lambda,N,parR.ESDTol,2,[],indbldiag);%Note it may be necessary to set parameter 5 to a non-zero value for masked areas
+                    elseif parR.ESDMeth==1 && size(Lambda,4)==1;esd=ESDSpectrode(Lambda,M/N,parR.ESDTol);%Note it may be necessary to set parameter 4 to a non-zero value for masked areas
                     else esd=ESDSimulated(Lambda,N,[],parR.NR);
                     end
                 else

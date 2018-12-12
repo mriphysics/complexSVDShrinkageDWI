@@ -1,4 +1,4 @@
-function [fg,v]=andersonMixing(fg,v,M,w)
+function [fg,v]=andersonMixing(fg,v,Q,w)
 
 %ANDERSONMIXING   Performs an Anderson mixing iteration according to [1] DG 
 %Anderson, "Iterative procedures for nonlinear integral equations," J ACM, 
@@ -14,7 +14,7 @@ function [fg,v]=andersonMixing(fg,v,M,w)
 %   element 1st dimension) and its update (1st element 1st dimension) over
 %   previous iterations (2nd dimension)
 %   % V is the current estimate of the map
-%   * M is the number of previous iterations used for updating the result
+%   * Q is the number of previous iterations used for updating the result
 %   * {W} is the damping parameter. It defaults to 0.1
 %   * FG is the updated array with the results of the fixed point and its
 %   update over previous iterations
@@ -26,19 +26,18 @@ if nargin<4 || isempty(w);w=0.1;end
 N=size(fg);
 b=fg(2,N(2),:,:)-v;
 fg(1,N(2),:,:)=b;
-if M>0
-    fgu=fg(:,N(2)-M:N(2),:,:);
+if Q>0
+    fgu=fg(:,N(2)-Q:N(2),:,:);
     F=fgu(1,:,:,:);
     F=diff(F,1,2);   
-    [F,b]=parUnaFun({F,b},@permute,[4 2 3 1]);%This way we link the different equations together
-    %[F,b]=parUnaFun({F,b},@double);
+    F=permute(F,[4 2 3 1]);b=permute(b,[4 2 3 1]);
     F=pinvmDamped(F,w,b);%%%THIS TOLERANCE MAY BE ARGUABLE FOR VERY HIGH ACCURACY (PROBABLY FOR ACCURACIES APPROACHING THAT VALUE, WHICH WE ARE NOT INTERESTED IN)
-    F=permute(F,[3 1 2]);     
+    F=permute(F,[3 1 2]);
     NF=size(F);
     al=zeros([NF(1) NF(2)+2],'like',F);al(:,2:end-1)=F;al(:,end)=1;
     al=permute(al,[3 2 1]);
     al=diff(al,1,2);
-    v=sum(bsxfun(@times,al,fgu(2,:,:,:)),2);    
+    v=sum(bsxfun(@times,al,fgu(2,:,:,:)),2);
 else
     v=fg(2,N(2),:,:);
 end

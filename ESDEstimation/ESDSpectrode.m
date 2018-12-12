@@ -16,8 +16,7 @@ function esd=ESDSpectrode(C,N,tolEnd,tolMinEig,tolUnique)
 %   * {TOLEND} is the error tolerance, defaults to 1e-4
 %   * {TOLMINEIG} is the minimum allowed eigenvalue, the covariance matrix
 %   is regularized by this value to guarantee positive definiteness.
-%   Defaults to 1e-3. A small value different from zero generally helps to 
-%   stabilize the estimates
+%   Defaults to 0. A small value may help to stabilize the estimates
 %   * {TOLUNIQUE} is the tolerance to group population eigenvalues, defaults 
 %   to 0
 %   * ESD is a cell array with the estimated ESDs. Each element is a 
@@ -32,7 +31,7 @@ function esd=ESDSpectrode(C,N,tolEnd,tolMinEig,tolUnique)
 %
 
 if nargin<3 || isempty(tolEnd);tolEnd=1e-4;end
-if nargin<4 || isempty(tolMinEig);tolMinEig=1e-3;end
+if nargin<4 || isempty(tolMinEig);tolMinEig=0;end%Setting this to a low value may help for singularities at 0
 if nargin<5 || isempty(tolUnique);tolUnique=0;end
 
 %DIAGONALIZE
@@ -70,7 +69,7 @@ function esdo=SpectrodeBody(eigvo,tolUnique,w,Beta,tolEnd)
     %CALL THE SPECTRODE METHOD
     if any(eigvtol(:)>1e-6)
         [grid,dens,~,~,mass_at_0,K_hat,l_hat,u_hat]=spectrode(eigvtol,Beta,wtol,[],[],tolEnd);  
-        [esdo.grid,esdo.dens,esdo.thre]=parUnaFun({grid,dens,max(u_hat)},@single);
+        esdo.grid=single(grid);esdo.dens=single(dens);esdo.thre=single(max(u_hat));
         esdo.gridd=gradient(esdo.grid);
         esdo.apdf=sum(esdo.dens.*esdo.gridd);
     else
