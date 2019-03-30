@@ -3,8 +3,10 @@
 %noise models'', L. Cordero-Grande, D. Christiaens, J. Hutter, A.N. Price, 
 %and J.V. Hajnal
 
-addpath(genpath('.'));
-pathData='../complexSVDShrinkageDWIData';
+clearvars
+curFolder=fileparts(mfilename('fullpath'));
+addpath(genpath(curFolder));%Add code
+pathData=strcat(curFolder,'/../complexSVDShrinkageDWIData');%Data path
 load(fullfile(pathData,'recFig04.mat'),'UpsilonInv');
 load(fullfile(pathData,'retFig04.mat'),'sigmav','Rv');
 
@@ -29,7 +31,7 @@ title('\textbf{a) Cumulative densities of noise estimates}','FontSize',FontSizeA
 xlabel('$\hat{\sigma}$','FontSize',FontSizeA,'Interpreter','latex')
 ylabel('$F(\hat{\sigma})$','FontSize',FontSizeA,'Interpreter','latex','rotation',0,'HorizontalAlignment','right')
 grid on
-legend({'$\hat{\sigma}^{\mathbf{Y}}_{\mathsf{EXP1}}$','$\hat{\sigma}^{\mathbf{Y}}_{\mathsf{EXP2}}$','$\hat{\sigma}^{\mathbf{Y}}_{\mathsf{MED}}$','$\hat{\sigma}^{\mathbf{W}}_{\mathsf{EXP1}}$','$\hat{\sigma}^{\mathbf{W}}_{\mathsf{EXP2}}$','$\hat{\sigma}^{\mathbf{W}}_{\mathsf{MED}}$'},'Interpreter','latex','FontSize',FontSizeA,'Location','NorthWest');
+legend({'$\hat{\sigma}^{\mathbf{Y}}_{\mathrm{EXP1}}$','$\hat{\sigma}^{\mathbf{Y}}_{\mathrm{EXP2}}$','$\hat{\sigma}^{\mathbf{Y}}_{\mathrm{MED}}$','$\hat{\sigma}^{\mathbf{W}}_{\mathrm{EXP1}}$','$\hat{\sigma}^{\mathbf{W}}_{\mathrm{EXP2}}$','$\hat{\sigma}^{\mathbf{W}}_{\mathrm{MED}}$'},'Interpreter','latex','FontSize',FontSizeA,'Location','NorthWest');
 xlim([0.4 1.4])
 
 set(gcf,'InvertHardCopy','off');
@@ -84,9 +86,9 @@ for n=1:NY
     cb=colorbar;
     colorTitleHandle = get(cb,'Title');
     cb.FontSize=FontSizeA;
-    if n==1;title('\textbf{$\quad$b) $\hat{\sigma}^{\mathbf{W}}_{\mathsf{EXP2}}$ (noise only)}','FontSize',FontSizeA+26,'Interpreter','latex');
-    elseif n==2;title('\textbf{$\quad$c) $\hat{\sigma}^{\mathbf{Y}}_{\mathsf{EXP2}}$ (signal plus noise)}','FontSize',FontSizeA+26,'Interpreter','latex');
-    elseif n==3;title('\textbf{$\quad$d) $\hat{R}^{\mathbf{Y}}_{\mathsf{EXP2}}\,(\%)$ (EXP2)}','FontSize',FontSizeA+26,'Interpreter','latex');
+    if n==1;title('\textbf{$\quad$b) $\hat{\sigma}^{\mathbf{W}}_{\mathrm{EXP2}}$ (noise only)}','FontSize',FontSizeA+26,'Interpreter','latex');
+    elseif n==2;title('\textbf{$\quad$c) $\hat{\sigma}^{\mathbf{Y}}_{\mathrm{EXP2}}$ (signal plus noise)}','FontSize',FontSizeA+26,'Interpreter','latex');
+    elseif n==3;title('\textbf{$\quad$d) $\hat{R}^{\mathbf{Y}}_{\mathrm{EXP2}}\,(\%)$ (EXP2)}','FontSize',FontSizeA+26,'Interpreter','latex');
     else title('\textbf{$\quad$e) $\hat{R}^{\mathbf{Y}}\,(\%)$ (ours)}','FontSize',FontSizeA+26,'Interpreter','latex');
     end
     cb.Position(4)=0.8;

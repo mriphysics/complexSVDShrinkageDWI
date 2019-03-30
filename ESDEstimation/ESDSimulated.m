@@ -25,79 +25,98 @@ NC=size(C);NC(end+1:4)=1;
 if N<=1;N=round(NC(1)/N);end%Second input is aspect ratio instead of number of samples
 Beta=NC(1)/N;
 assert(mod(N,NC(4))==0,'The number of populations observed cannot be distributed uniformly for this realization');
+comp=~isreal(C);
 
 %CONVERT TO MATRIX FORM AND GENERATE THE REQUIRED NUMBER OF SAMPLES
 if NC(2)==1;isd=1;else isd=0;end
+if tolMinEig~=0
+    I=eye(NC(1),'like',C);
+    if isd;I=diagm(I);end
+    I=tolMinEig*I;
+    C=bsxfun(@plus,C,I');
+end
 I=eye(NC(1),'like',C);
-if isd;I=diagm(I);end
-I=tolMinEig*I;
-C=bsxfun(@plus,C,I');
-I=eye(NC(1),'like',C);
-if isd;C=diagm(permute(C,[2 1 3 4]));end
 
 %REPEATS FOR SIMULATION
 if NR>1
-    Cin=C;
-    C=repmat(C,[NR NR 1]);
-    NC=size(C);NC(end+1:4)=1;
-    Cin=reshape(Cin,[NC(1:2)/NR prod(NC(3:4))]);
-    C=reshape(C,[NC(1:2) prod(NC(3:4))]);
-    
-    NCC=size(Cin,3);
-    if NCC>=8
-        parfor o=1:NCC;C(:,:,o)=blkdiagBody(Cin(:,:,o),NR);end
+    if isd
+        C=repmat(C,[NR 1 1]);
     else
-        for o=1:NCC;C(:,:,o)=blkdiagBody(Cin(:,:,o),NR);end
-    end    
-    C=reshape(C,NC);
+        Cin=C;
+        NCin=size(Cin);
+        C=repmat(C,[NR NR 1]);
+        NC=size(C);NC(end+1:4)=1;
+        Cin=reshape(Cin,[NC(1:2)/NR prod(NC(3:4))]);
+        C=reshape(C,[NC(1:2) prod(NC(3:4))]);    
+        NCC=size(Cin,3);
+        if NCC>=8
+            parfor o=1:NCC;C(:,:,o)=blkdiagBody(Cin(:,:,o),NR);end
+        else
+            for o=1:NCC;C(:,:,o)=blkdiagBody(Cin(:,:,o),NR);end
+        end    
+        C=reshape(C,NC);
+    end
     N=N*NR;
 end
 
 %GENERATE NOISE
-n=plugNoise(repmat(dynInd(C,[1 1],[2 4]),[1 N 1]));
+n=repmat(dynInd(C,[1 1],[2 4]),[1 N 1]);
+n=plugNoise(n,1);
 n=resPop(n,2,[N/NC(4) NC(4)],[2 4]);
 NC=size(C);NC(end+1:4)=1;
-
 C=reshape(C,[NC(1:2) prod(NC(3:4))]);
+
 %DIAGONALIZE
-U=C;D=C;
+if ~isd
+    U=C;D=C;
 
-%CAREFUL FROM HERE ON. MORE THAN ONE COVARIANCE POPULATION AND ONE REALIZATION HAS NOT BEEN TESTED
-Cin=(C+matfun(@ctranspose,C))/2;%Force the matrix to be Hermitian
-Cin=gather(Cin);
-if size(Cin,3)>=8;parforFl=Inf;else parforFl=0;end
+    %CAREFUL FROM HERE ON. MORE THAN ONE COVARIANCE POPULATION AND ONE REALIZATION HAS NOT BEEN TESTED
+    Cin=(C+matfun(@ctranspose,C))/2;%Force the matrix to be Hermitian
+    Cin=gather(Cin);
+    if size(Cin,3)>=8;parforFl=Inf;else parforFl=0;end
+    UId=eye(NC(1),'like',Cin);
 
-parfor(o=1:size(Cin,3),parforFl)
-    Uor=Cin(:,:,o);Dor=Cin(:,:,o);
-    try
-        [Uor,Dor]=schur(Cin(:,:,o));
-    catch%Numerical issues-we smooth the matrix (idea from https://uk.mathworks.com/matlabcentral/answers/172633-eig-doesn-t-converge-can-you-explain-why)
-        Caux=Cin(:,:,o);
-        nA=sum(sum(Caux.^2));nA=nA/numel(Caux);
-        Caux(Caux.^2<1e-10*nA)=0;
-        Cin(:,:,o)=Caux;
-        [Uor,Dor]=schur(Cin(:,:,o));           
-    end        
-    Uaux=Uor;Daux=Dor;
-    %for r=1:NR-1;Uaux=blkdiag(Uaux,Uor);Daux=blkdiag(Daux,Dor);end 
-    U(:,:,o)=Uaux;D(:,:,o)=Daux;    
+    parfor(o=1:size(Cin,3),parforFl)
+        Uor=UId;Dor=Cin(:,:,o);
+        if ~isdiag(Dor)
+            try
+                [Uor,Dor]=schur(Cin(:,:,o));
+            catch%Numerical issues-we smooth the matrix (idea from https://uk.mathworks.com/matlabcentral/answers/172633-eig-doesn-t-converge-can-you-explain-why)
+                Caux=Cin(:,:,o);
+                nA=sum(sum(Caux.^2));nA=nA/numel(Caux);
+                Caux(Caux.^2<1e-10*nA)=0;
+                Cin(:,:,o)=Caux;
+                [Uor,Dor]=schur(Cin(:,:,o));           
+            end            
+        end
+        Uaux=Uor;Daux=Dor;
+        %for r=1:NR-1;Uaux=blkdiag(Uaux,Uor);Daux=blkdiag(Daux,Dor);end 
+        U(:,:,o)=Uaux;D(:,:,o)=Daux;    
+    end
+    if gpu;U=gpuArray(U);D=gpuArray(D);end
+    D=sqrt(abs(diagm(D)));
+
+    U=bsxfun(@times,U,D);
+    U=reshape(U,NC);
+    n=matfun(@mtimes,U,n);
+else
+    n=bsxfun(@times,sqrt(abs(C)),n);
 end
-if gpu;U=gpuArray(U);D=gpuArray(D);end
-D=sqrt(abs(diagm(D)));
-
-U=bsxfun(@times,U,D);
-U=reshape(U,NC);
-n=matfun(@mtimes,U,n);
 n=permute(n,[1 2 4 3 5]);
+
 n=resPop(n,2:4,[N NC(3)],2:3);
 nou=n;
-n=n/sqrt(2*N);
-n=matfun(@mtimes,n,matfun(@ctranspose,n));
+if NC(1)<N
+    n=n/sqrt((1+comp)*N);
+    n=matfun(@mtimes,n,matfun(@ctranspose,n));
+else
+    n=n/sqrt((1+comp)*NC(1));
+    n=matfun(@mtimes,matfun(@ctranspose,n),n);
+end
 simuESD=eigm(n);
 
 simuESD(simuESD<0)=0;
-esd.simu=simuESD;
-
+esd.simu=double(simuESD);%Double for stability of amse computations
 end
 
 function Cn=blkdiagBody(Co,NR)   

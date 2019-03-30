@@ -21,6 +21,7 @@ gpu=isa(ind,'gpuArray');
 ind=double(ind);
 
 N=size(x);N(end+1:dim)=1;ND=length(N);
+Nor=N(dim);
 NI=size(ind);NI(end+1:ND)=1;
 NI(dim)=1;N(dim)=1;
 assert(length(NI)<=length(N),'The dimensions of the index array (%d) are bigger than the dimensions of the data array (%d)',length(NI),length(N));
@@ -28,12 +29,16 @@ assert(length(NI)<=length(N),'The dimensions of the index array (%d) are bigger 
 %assert(all(NI==N | NI==1),'Some index and data array dimensions not compatible');%Disabled for more flexible operation
 ind=(ind-1)*prod(N(1:dim-1));
 ind=repmat(ind,N./NI);
+
 if nargin<5 || isempty(indb);indb=1:prod(N(1:dim-1));else indb=double(indb);end
 if gpu;indb=gpuArray(indb);end
 if ~isempty(N(1:dim-1));indb=reshape(indb,[N(1:dim-1) ones(1,ND-dim+1)]);end
+
 if nargin<6 || isempty(indf);indf=0:prod(N(dim+1:end))-1;else indf=double(indf);end
 if gpu;indf=gpuArray(indf);end
 if ~isempty(N(dim+1:end));indf=reshape(indf,[ones(1,dim) N(dim+1:end)]);end
-indf=indf*prod([N(1:dim-1) N(dim)]);
+
+indf=indf*prod([N(1:dim-1) Nor]);
 ind=bsxfun(@plus,ind,bsxfun(@plus,indb,indf));
+
 if nargin>=4 && ~isempty(y);x(ind)=y;else x=x(ind);end

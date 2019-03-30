@@ -8,11 +8,9 @@ function x=plugNoise(x,useR)
 %   * X is the noise array with same dimensions as the input array
 %
 
-gpu=isa(x,'gpuArray');
-if nargin<2;useR=0;end%Complex only, for back-compatibility!
+if nargin<2 || isempty(useR);useR=0;end%Complex only, for back-compatibility!
 
 comp=~isreal(x) || ~useR;
-
 N=size(x);
-if comp;x=single(randn(N))+1i*single(randn(N));else x=single(randn(N));end
-if gpu;x=gpuArray(x);end
+if comp;x=randn(N,'like',real(x))+1i*randn(N,'like',real(x));else x=randn(N,'like',x);end
+

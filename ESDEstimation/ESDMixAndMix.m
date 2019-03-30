@@ -293,8 +293,8 @@ for l=1:NL%For each resolution level
 end
 
 %ASSIGNMENT
-esd.grid=single(permute(gridxPre,[5 2 3 4 1]));
-esd.dens=single(permute(abs(densPre),[5 2 3 4 1]));
+esd.grid=double(permute(gridxPre,[5 2 3 4 1]));%Doubles for stability of amse computations
+esd.dens=double(permute(abs(densPre),[5 2 3 4 1]));%Doubles for stability of amse computations
 
 %UPPER THRESHOLD ESTIMATE
 NP=size(esd.dens,1);
@@ -306,4 +306,5 @@ esd.dens(esd.grid>repmat(esd.thre,[NP 1 1]))=0;
 %GRADIENT AND INTEGRAL ESTIMATES
 esd.gridd=permute(gradient(permute(esd.grid,[2 1 3])),[2 1 3]);
 esd.apdf=sum(esd.dens.*esd.gridd,1);
+
 

@@ -69,7 +69,7 @@ function esdo=SpectrodeBody(eigvo,tolUnique,w,Beta,tolEnd)
     %CALL THE SPECTRODE METHOD
     if any(eigvtol(:)>1e-6)
         [grid,dens,~,~,mass_at_0,K_hat,l_hat,u_hat]=spectrode(eigvtol,Beta,wtol,[],[],tolEnd);  
-        esdo.grid=single(grid);esdo.dens=single(dens);esdo.thre=single(max(u_hat));
+        esdo.grid=double(grid);esdo.dens=double(dens);esdo.thre=double(max(u_hat));%Doubles for stability of amse computations
         esdo.gridd=gradient(esdo.grid);
         esdo.apdf=sum(esdo.dens.*esdo.gridd);
     else

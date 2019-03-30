@@ -13,7 +13,6 @@ NX=size(X);NX(end+1:3)=1;
 X=(X+matfun(@ctranspose,X))/2;%Force the matrix to be Hermitian
 X=gather(X);
 eigv=dynInd(X,1,2);
-
 if NXP(3)>=8
     parfor o=1:NXP(3);eigv(:,1,o)=eig(X(:,:,o));end
 else

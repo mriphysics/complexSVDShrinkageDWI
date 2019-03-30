@@ -15,8 +15,7 @@ function x=fftGPU(x,m,gpu,F,re)
 %   with different array sizes and along different dimensions
 %   * {F} is a FFT matrix (or any other square matrix) provided by the 
 %   user. If not provided and required, it is obtained by the function
-%   * {RE} is a flag to indicate that the FFT is to be applied to a real 
-%   image (defaults to 0)
+%   * {RE} served to denote real-only transforms, but is no longer in use
 %   * X is the FFT-transformed array
 %
 
@@ -25,38 +24,31 @@ if strcmp(version('-release'),'2015a') && gpu==0;gpu=1;end
 if nargin<4;F=[];end
 if nargin<5 || isempty(re);re=0;end
 
-ism=1;
-if gpu==0 && ~re
+if gpu==0
     x=fft(x,[],m);
-elseif gpu==1 && ~re
-    if m==1
-        if size(x,1)~=1;x=fft(x);end
-    else
-        perm=1:ndims(x);perm(1)=m;perm(m)=1;
-        x=permute(x,perm);
-        if size(x,1)~=1;x=fft(x);end
-        x=permute(x,perm);
-    end
-elseif gpu==2 || re
+elseif gpu==1
+     if m~=1
+         perm=1:ndims(x);perm([1 m])=[m 1];
+         x=permute(x,perm);
+     end
+     if size(x,1)~=1;x=fft(x);end
+     if m~=1;x=permute(x,perm);end
+elseif gpu==2
     N=size(x,m);
-    if N~=1 || re>0
-        if isempty(F);F=build1DFTM(N,0,gpu,re);end
+    ND=ndims(x);        
+    if N~=1
+        if isempty(F);F=build1DFTM(N,0,gpu);end
         if (gpu && isaUnderlying(x,'double')) || isa(x,'double');F=double(F);end
-        if m~=1
-            perm=1:ndims(x);perm([1 m])=[m 1];
-            x=permute(x,perm);
+        S=size(x);S(end+1:max(ND+1,m+1))=1;
+        if m~=1;x=reshape(x,[prod(S(1:m-1)) S(m) prod(S(m+1:ND))]);else x=x(:,:);end
+        if m==1
+            x=F*x;
+        elseif m~=ND
+            x=matfun(@mtimes,x,F.');
+        else
+            x=x*F.';
         end
-        if ~ismatrix(x)
-            S=size(x);S(end+1:2)=1;
-            x=reshape(x,[S(1) prod(S(2:end))]);
-            ism=0;
-        end
-        %if re==2;x=real(F)*x+1i*(imag(F)*x);else x=F*x;end
-        x=F*x;
-        if ~ism
-            S(1)=size(x,1);
-            x=reshape(x,S);
-        end
-        if m~=1;x=permute(x,perm);end
+        if m==1;S(m)=size(x,1);else S(m)=size(x,2);end               
+        x=reshape(x,S);
     end
 end

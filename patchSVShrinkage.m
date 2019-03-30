@@ -1,4 +1,4 @@
-function [xh,sh,ph,amseh,Gamma]=patchSVShrinkage(x,dimsM,sp,parR,cov)
+function [xh,sh,ph,amseh,Gamma,mseMatrix,amseMatrix,mse,amse,namse]=patchSVShrinkage(x,dimsM,sp,parR,cov,xGT,Ma)
 
 %PATCHSVSHRINKAGE   Performs a shrinkage of the SVD over patchs
 %extracted from an array and integrates back the information
@@ -20,11 +20,21 @@ function [xh,sh,ph,amseh,Gamma]=patchSVShrinkage(x,dimsM,sp,parR,cov)
 %       each encoding type 1<=a<=A.
 %       - COV.DIMSNOPE and array of size (ND-1)xA, with non correlated
 %       dimensions.
+%   * {XGT} is a ground truth image
+%   * {MA} is a mask for matrix computations
 %   * XH is the recovered array
 %   * SH is the recovered std of noise
 %   * PH is the recovered number of components
 %   * AMSEH is an estimate of the asymptotic mean square error
 %   * GAMMA is an estimate of the patch size
+%   * MSEMATRIX is the observed error over the patches (in PSNR units)
+%   * AMSEMATRIX is the estimated error over the patches (in PSNR units)
+%   * MSE is the observed error on the images (after patch overlap, in
+%   PSNR units)
+%   * AMSE is the estimated error on the images (after patch overlap, in
+%   PSNR units)
+%   * NAMSE is the estimated normalized error on the images (after patch 
+%   overlap, in PSNR units)
 %
 
 %DEFAULT VALUES AND DIMENSIONS
@@ -38,22 +48,39 @@ if nargin<4 || isempty(parR)
     parR.Subsampling=1;%Subsampling factor for patch construction
     parR.NoiEstMeth='None';%Noise estimation method. One of the following: 'None' / 'Exp1' / 'Exp2' / 'Medi'
     parR.ShrinkMeth='Frob';%Shrinkage method. One of the following: 'Hard' / 'Soft' / 'Frob' / 'Oper' / 'Nucl' / 'Exp1' / 'Exp2'
+    parR.WeightAssemb='Gauss';%Type of window weighting for patch assembling. One of the following: 'Gauss' / 'Unifo' / 'Invva'
+    parR.PatchSimilar=2;%Similarity metric to build the patches. 2 for Euclidean / 1 for Manhattan
+    parR.UseNoiseStandardization=false;%false for not to operate in noise units but in signal units
     parR.NR=1;%Number of realizations of random matrix simulations
     parR.Verbosity=0;%To plot debugging information
     parR.DirInd=0;%To use accelerate by using the independence of covariances along a given direction
 end
 if nargin<5;cov=[];end
+if nargin<6;xGT=[];end
+NX=size(x);NX(end+1:dimsM)=1;ND=length(NX);
+if nargin<7
+    if ~isempty(xGT);Ma=ones(NX(1:dimsM),'like',xGT);else Ma=[];end
+end
+
+%ACTIVATE THE PARALLEL POOL
+if isempty(gcp);parpool;end
 
 gpu=isa(x,'gpuArray');
 if gpu;dev=gpuDevice;end
-NX=size(x);NX(end+1:dimsM)=1;ND=length(NX);
+if parR.Verbosity>=2
+    if gpu;wait(dev);end
+    ttsta=tic;
+end
+
 N=prod(NX(dimsM+1:ND));%In this implementation the number of columns comprises all the elements in dimsN. This may be generalized in the future 
 if length(parR.Subsampling)==1;parR.Subsampling=parR.Subsampling*onM;end
 
 %ARRANGE INPUT DATA AND BOOK MEMORY FOR RECOVERED DATA
 x=reshape(x,[prod(NX(1:dimsM)) prod(NX(dimsM+1:ND))]);%Arrange in matrix form
+if ~isempty(xGT);xGT=reshape(xGT,[prod(NX(1:dimsM)) prod(NX(dimsM+1:ND))]);end
+if ~isempty(Ma);Ma=reshape(Ma,[prod(NX(1:dimsM)) 1]);end
 xh=x;xh(:)=0;%Recovered data
-sh=xh(:,1);ph=sh;amseh=sh;amssh=sh;wh=sh;
+sh=xh(:,1);ph=sh;amseh=sh;amssh=sh;wha=sh;whb=sh;
 
 %PATCH STRUCTURE
 NGR=ceil(((N*prod(sp)).^(1/dimsM))./sp);
@@ -61,13 +88,20 @@ NGD=2*NGR+1;
 
 %DEFINE THE STRUCTURE FOR SAMPLING THE SPECTRUM TO ESTIMATE BEST parR.Gamma
 Nsweeps=length(parR.Gamma)+1;
-amseGamma=inf(2,Nsweeps);
+amseGamma=inf(2,Nsweeps-1);
+NGamma=zeros(1,Nsweeps-1);
 if gpu;amseGamma=gpuArray(amseGamma);end
 if length(parR.Gamma)==1
     Nsweeps=1;
     indBestGamma=1;
 end
+
 for ns=1:Nsweeps
+    if parR.Verbosity>=2 && (ns==Nsweeps || ns==(Nsweeps+1)/2)
+        if gpu;wait(dev);end
+        fprintf('Time testing candidates: %.2fs\n',toc(ttsta));
+        ttsta=tic;
+    end           
     if parR.Verbosity>=3
         if gpu;wait(dev);end
         tsta=tic;
@@ -82,12 +116,12 @@ for ns=1:Nsweeps
     %WEIGHTS OF THE PATCH STRUCTURE
     xx=generateGrid(NGD,gpu,NGD,ceil((NGD+1)/2));
     r=xx{1}(1);r(1)=double(0);
-    for n=1:dimsM;r=bsxfun(@plus,r,(xx{n}*sp(n)).^2);end
+    for n=1:dimsM;r=bsxfun(@plus,r,abs(xx{n}*sp(n)).^parR.PatchSimilar);end
     [~,ir]=sort(r(:));
     irM=ir(1:M);
     irs=ind2subV(NGD,irM);
     for n=1:dimsM;xx{n}=xx{n}(irs(:,n));end     
-    w=spaNeigh(xx,NGR);    
+    w=spaNeigh(xx,NGR,parR.WeightAssemb);    
     w=w(irM)/sum(w(:));
     
     %TO FORM MATRIX BLOCKS ALONG THE DIRECTION OF INDEPENDENCE
@@ -149,23 +183,35 @@ for ns=1:Nsweeps
     
     %SVD SHRINKAGE OVER THE PATCHES    
     if parR.Verbosity>=3;fprintf('Number of patches: %d\n',O);end
-    if parR.ESDMeth==2;bS=ceil(6400/(NC(4)*M));else bS=ceil(400/NC(4));end%MODIFICATIONS MAY BE REQUIRED FOR DIFFERENT COMPUTING PLATFORMS
+    if parR.ESDMeth==2;bS=ceil(2048/(NC(4)*M));else bS=ceil(128/NC(4));end%MODIFICATIONS MAY BE REQUIRED FOR DIFFERENT COMPUTING PLATFORMS
     amseGamma(:,ns)=0;
     contO=0;
     if parR.Verbosity>=3
         if gpu;wait(dev);end
-        fprintf('Time building patches: %.3f s\n',toc(tsta));
-    end                
+        fprintf('Time building patches: %.3fs\n',toc(tsta));
+    end       
+    
+    if ~isempty(xGT) && ns==Nsweeps
+        mseMatrix=nan([1 1 O],'like',amssh);
+        amseMatrix=nan([1 1 O],'like',amssh);
+    end    
+    
     for o=1:bS:O;vO=o:min(o+bS-1,O);%ITERATING ALONG THE PATCHES
         contO=contO+1;
         if ~isempty(vO)
             %PATCH EXTRACTION
             L=length(vO);%NUMBER OF PATCHES TO BE PROCESSED IN EACH CHUNK
-            xoh=x(icpr(vO(1),:),:);xoh=repmat(xoh,[1 1 L]);
-            for l=2:L
-                xoh(:,:,l)=x(icpr(vO(l),:),:);
-            end               
-
+            xoh=x(icpr(vO(1),:),:);xoh=repmat(xoh,[1 1 L]);            
+            for l=2:L;xoh(:,:,l)=x(icpr(vO(l),:),:);end               
+            if ~isempty(xGT)
+                xGToh=xGT(icpr(vO(1),:),:);xGToh=repmat(xGToh,[1 1 L]);
+                for l=2:L;xGToh(:,:,l)=xGT(icpr(vO(l),:),:);end
+            end
+            if ~isempty(Ma)
+                Maoh=Ma(icpr(vO(1),:),1);Maoh=repmat(Maoh,[1 1 L]);
+                for l=2:L;Maoh(:,1,l)=Ma(icpr(vO(l),:),1);end
+            end
+            
             %COMPUTATION OF THE COVARIANCE OVER THE LOCAL PATCHES
             if ~isempty(cov) && isfield(cov,'Lambda')
                 if parR.Verbosity>=3
@@ -200,7 +246,7 @@ for ns=1:Nsweeps
                 irs=squeeze(irs);                     
                 if parR.Verbosity>=3
                     if gpu;wait(dev);end
-                    fprintf('Time computing the covariance: %.3f s\n',toc(tsta));
+                    fprintf('Time computing the covariance: %.3fs\n',toc(tsta));
                 end    
 
                 %ESTIMATING THE ESD                    
@@ -211,14 +257,15 @@ for ns=1:Nsweeps
                 if strcmp(parR.NoiEstMeth,'None') || parR.ESDMeth==3
                     if parR.ESDMeth==2;esd=ESDMixAndMix(Lambda,N,parR.ESDTol,2,[],indbldiag);%Note it may be necessary to set parameter 5 to a non-zero value for masked areas
                     elseif parR.ESDMeth==1 && size(Lambda,4)==1;esd=ESDSpectrode(Lambda,M/N,parR.ESDTol);%Note it may be necessary to set parameter 4 to a non-zero value for masked areas
-                    else esd=ESDSimulated(Lambda,N,[],parR.NR);
+                    elseif ismember(parR.ESDMeth,[0 3]);esd=ESDSimulated(Lambda,N,[],parR.NR);
+                    else esd=[];
                     end
                 else
                     esd=[];
                 end                
                 if parR.Verbosity>=3
                     if gpu;wait(dev);end
-                    fprintf('Time estimating the ESD: %.3f s\n',toc(tsta));
+                    fprintf('Time estimating the ESD: %.3fs\n',toc(tsta));
                 end                    
             end 
 
@@ -227,10 +274,14 @@ for ns=1:Nsweeps
                 if gpu;wait(dev);end
                 tsta=tic;
             end
-            [xoh,soh,poh,amseoh,amssoh]=SVShrinkage(xoh,parR.ShrinkMeth,parR.NoiEstMeth,esd,MPmedian);                
+            if ns==Nsweeps
+                [amseoh,amssoh,xoh,soh,poh]=SVShrinkage(xoh,parR.ShrinkMeth,parR.NoiEstMeth,esd,MPmedian);                
+            else
+                [amseoh,amssoh]=SVShrinkage(xoh,parR.ShrinkMeth,parR.NoiEstMeth,esd,MPmedian);%We only estimate the errors (quicker)
+            end
             if parR.Verbosity>=3
                 if gpu;wait(dev);end
-                fprintf('Time shrinking: %.3f s\n',toc(tsta));
+                fprintf('Time shrinking: %.3fs\n',toc(tsta));
             end
             if parR.Verbosity>=3;fprintf('Estimated AMSE: %.3f\n',mean(amseoh(:)));end
 
@@ -239,16 +290,37 @@ for ns=1:Nsweeps
                 if gpu;wait(dev);end
                 tsta=tic;
             end                
-            if ~isempty(amseoh);amseGamma(:,ns)=amseGamma(:,ns)+sum(vertcat(amseoh,amssoh),3);end
-            if ns==Nsweeps
-                xoh=bsxfun(@times,xoh,w);soh=bsxfun(@times,soh,w);poh=bsxfun(@times,poh,w);amseoh=bsxfun(@times,amseoh,w);amssoh=bsxfun(@times,amssoh,w);
+            if  ns~=Nsweeps
+                if ~isempty(amseoh)                    
+                    if ~isempty(Ma)
+                        vOint=sum(Maoh,1)==M;
+                        amseoh=dynInd(amseoh,vOint,3);amssoh=dynInd(amssoh,vOint,3);
+                        NGamma(ns)=NGamma(ns)+gather(sum(single(vOint)));
+                    else
+                        NGamma(ns)=NGamma(ns)+L;
+                    end
+                    amseGamma(:,ns)=amseGamma(:,ns)+sum(vertcat(amseoh,amssoh),3);                    
+                end
+            else
+                if ~isempty(xGT)
+                    vOint=sum(Maoh,1)==M;
+                    vOintO=vO(vOint);
+                    mseMatrix(vOintO)=dynInd(multDimSum((xoh-xGToh).^2,1:2)/(M*N),vOint,3);
+                    amseMatrix(vOintO)=dynInd(amseoh,vOint,3);            
+                end                                
+                if strcmp(parR.WeightAssemb,'Invva');wva=1./(amseoh+eps);%NOTE THIS IS NOT A GOOD WEIGHT FOR AMSS, IT WILL ALWAYS DECREASE WITH INCREASED GAMMA!!
+                else wva=repmat(w,[1 1 L]);
+                end
+                wvb=repmat(w,[1 1 L]);
+                xoh=bsxfun(@times,xoh,wva);soh=bsxfun(@times,soh,wva);poh=bsxfun(@times,poh,wva);amssoh=bsxfun(@times,amssoh,wva);amseoh=bsxfun(@times,amseoh,wvb);
                 for l=1:L                
                     xh(icpr(vO(l),:),:)=xh(icpr(vO(l),:),:)+xoh(:,:,l);
                     sh(icpr(vO(l),:),:)=bsxfun(@plus,sh(icpr(vO(l),:),:),soh(:,:,l));
                     ph(icpr(vO(l),:),:)=bsxfun(@plus,ph(icpr(vO(l),:),:),poh(:,:,l));
                     amseh(icpr(vO(l),:),:)=bsxfun(@plus,amseh(icpr(vO(l),:),:),amseoh(:,:,l));
                     amssh(icpr(vO(l),:),:)=bsxfun(@plus,amssh(icpr(vO(l),:),:),amssoh(:,:,l));
-                    wh(icpr(vO(l),:))=wh(icpr(vO(l),:))+w;
+                    wha(icpr(vO(l),:),:)=wha(icpr(vO(l),:),:)+wva(:,:,l);
+                    whb(icpr(vO(l),:),:)=whb(icpr(vO(l),:),:)+wvb(:,:,l);
                 end
             end
             if parR.Verbosity>=3
@@ -269,15 +341,54 @@ for ns=1:Nsweeps
     
     if ns==Nsweeps
         %ARRANGEMENTS TO RETURN THE DATA
-        wh=1./wh;
-        xh=bsxfun(@times,xh,wh);sh=bsxfun(@times,sh,wh);ph=bsxfun(@times,ph,wh);amseh=bsxfun(@times,amseh,wh);amssh=bsxfun(@times,amssh,wh);
+        wha=1./wha;whb=1./whb;
+        xh=bsxfun(@times,xh,wha);sh=bsxfun(@times,sh,wha);ph=bsxfun(@times,ph,wha);amssh=bsxfun(@times,amssh,wha);amseh=bsxfun(@times,amseh,whb);
         xh=reshape(xh,NX);
         [sh,ph,amseh,amssh]=parUnaFun({sh,ph,amseh,amssh},@reshape,NX(1:dimsM));
     elseif ns==Nsweeps-1
+        amseGamma=bsxfun(@rdivide,gather(amseGamma),NGamma);
         if parR.useRatioAMSE;amseGamma(1,:)=amseGamma(1,:)./amseGamma(2,:);end
         [valBestGamma,indBestGamma]=min(amseGamma(1,:)); 
         if parR.Verbosity>=3;fprintf('Set of AMSEs: %s\n',sprintf('%.4f ',amseGamma(1,:)));end
         if parR.Verbosity>=2;fprintf('Best AMSE: %.4f for Gamma=%.2f\n',valBestGamma,parR.Gamma(indBestGamma));end
     end
 end
-if parR.useRatioAMSE==1;amseh=amseh/mean(amssh(:));elseif parR.useRatioAMSE==2 amseh=cat(5,amseh,amssh);end
+if parR.useRatioAMSE==1;amseh=amseh/mean(amssh(:));elseif parR.useRatioAMSE==2;amseh=cat(5,amseh,amssh);end
+
+if ~isempty(xGT)
+    xmax=max(xGT(:)).^2;
+    mse=(xh(:)-xGT(:)).^2;
+    mse=reshape(mse,[prod(NX(1:dimsM)) prod(NX(dimsM+1:ND))]);
+    mse=mse(Ma==1,:);
+    mse=mse(~isnan(mse));
+    mse=sum(mse(:))/numel(mse);
+        
+    amse=dynInd(amseh,1,5);
+    amse=amse(Ma==1 & ~isnan(amse(:)));  
+    amse=sum(amse(:))/numel(amse);
+    
+    if parR.useRatioAMSE==2
+        namse=dynInd(amseh,2,5);
+        namse=namse(Ma==1 & ~isnan(namse(:)));  
+        namse=sum(namse(:))/numel(namse);
+        namse=10*log10(namse./amse);
+    else
+        namse=nan;
+    end
+    
+    mseMatrix=mseMatrix(~isnan(mseMatrix));
+    mseMatrix=sum(mseMatrix(:))/numel(mseMatrix);   
+    
+    amseMatrix=amseMatrix(~isnan(amseMatrix));
+    amseMatrix=sum(amseMatrix(:)/numel(amseMatrix));   
+    
+    mse=10*log10(xmax/mse);
+    amse=10*log10(xmax/amse);
+    mseMatrix=10*log10(xmax/mseMatrix);
+    amseMatrix=10*log10(xmax/amseMatrix);    
+end
+
+if parR.Verbosity>=2
+    if gpu;wait(dev);end
+    fprintf('Time denoising: %.2fs\n',toc(ttsta));
+end

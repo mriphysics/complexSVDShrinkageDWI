@@ -1,12 +1,14 @@
-%PLOT_EXP1 script generates part of Fig. 2 of manuscript ''Complex 
+%PLOT_EXP2 script generates part of Fig. 9 of manuscript ''Complex 
 %diffusion-weighted image estimation via matrix recovery under general 
 %noise models'', L. Cordero-Grande, D. Christiaens, J. Hutter, A.N. Price, 
 %and J.V. Hajnal
 
-addpath(genpath('.'));
-pathData='../complexSVDShrinkageDWIData';
-load(fullfile(pathData,'recFig08.mat'),'y');
-load(fullfile(pathData,'retFig08.mat'),'xv');
+clearvars
+curFolder=fileparts(mfilename('fullpath'));
+addpath(genpath(curFolder));%Add code
+pathData=strcat(curFolder,'/../complexSVDShrinkageDWIData');%Data path
+load(fullfile(pathData,'recFig09.mat'),'y');
+load(fullfile(pathData,'retFig09.mat'),'xv');
 
 genericFigInformation;
 

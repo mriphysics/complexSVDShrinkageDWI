@@ -4,12 +4,14 @@
 %Christiaens, J. Hutter, A.N. Price, and J.V. Hajnal
 
 clearvars
+parR.Plot=1;%0 to save results / 1 to save and plot results
 parR.Verbosity=2;%Level of verbosity, from 0 to 3
 gpu=gpuDeviceCount;%Detects whether gpu computations are possible
 if gpu;dev=gpuDevice;end
 
-addpath(genpath('.'));%Add code
-pathData='../complexSVDShrinkageDWIData';%Data path
+curFolder=fileparts(mfilename('fullpath'));
+addpath(genpath(curFolder));%Add code
+pathData=strcat(curFolder,'/../complexSVDShrinkageDWIData');%Data path
 
 %READ DATA
 if parR.Verbosity>0
@@ -33,6 +35,8 @@ parR.ESDMeth=0;%0->Use simulation / 1-> Use SPECTRODE / 2-> Use MIXANDMIX / 3-> 
 parR.ESDTol=1e-2;%Tolerance for ESD computations (role depends on the method)
 parR.NR=1;%Number of realizations of random matrix simulations
 parR.DirInd=0;%To accelerate by using independence of covariances along a given direction
+parR.PatchSimilar=2;%Similarity metric to build the patches. 2 for Euclidean / 1 for Manhattan
+parR.WeightAssemb='Gauss';%Type of window weighting for patch assembling. One of the following: 'Gauss' / 'Unifo' / 'Invva'
 parR.Gamma=0.2:0.05:0.95;%Random matrix aspect ratio, vector of values interpreted as candidates for patch size estimations
 parR.Subsampling=[2 2 2];%Subsampling factor for patch construction, bigger values produce quicker denoising, but if too big holes may appear in the resulting data
 if strcmp(typExec,'Quick');parR.Subsampling=[4 4 4];end
@@ -112,3 +116,7 @@ end
 if parR.Verbosity>0;fprintf('Saving results...\n');end
 save(fullfile(pathData,'retFig04.mat'),'xv','sigmav','Rv','amsev','gammav','-v7.3');
 if parR.Verbosity>0;fprintf('Finished saving results\n');end
+
+%PLOT RESULTS
+if parR.Plot;plot_Exp1;end
+    

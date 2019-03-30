@@ -1,4 +1,4 @@
-function [A,sigma,P,amse,amss,sv,nsv]=SVShrinkage(A,shrinkMeth,noiEstMeth,esd,MPmedian)
+function [amse,amss,A,sigma,P,sv,nsv]=SVShrinkage(A,shrinkMeth,noiEstMeth,esd,MPmedian)
 
 %SVSHRINKAGE  applies a shrinkage of the singular values of A according to 
 %[1] M Gavish, DL Donoho, "Optimal shrinkage of singular values," IEEE 
@@ -12,10 +12,10 @@ function [A,sigma,P,amse,amss,sv,nsv]=SVShrinkage(A,shrinkMeth,noiEstMeth,esd,MP
 %associated shrinkage
 %   [A,SIGMA,P]=SVSHRINKAGE(A,SHRINKMETH,NOIESTMETH,{ESD},{MPMEDIAN})
 %   * A is a noisy matrix to be filtered
-%   * SHRINKMETH determines the cost function to perform shrinkage. One of 
+%   * {SHRINKMETH} determines the cost function to perform shrinkage. One of 
 %   the following values: 'Hard' / 'Soft' / 'Frob' / 'Oper' / 'Nucl' / 
 %   'Exp1' / 'Exp2'. Defaults to 'Frob'
-%   * NOIESTMETH determines the method to estimate the noise level. One of 
+%   * {NOIESTMETH} determines the method to estimate the noise level. One of 
 %   the following: 'None' / 'Exp1' / 'Exp2' / 'Medi'. Defaults to 'None' 
 %   (noise is standardized)
 %   * {ESD} is a cell containing structures with an estimate of the 
@@ -26,12 +26,12 @@ function [A,sigma,P,amse,amss,sv,nsv]=SVShrinkage(A,shrinkMeth,noiEstMeth,esd,MP
 %       - ESD.DENS, the empirical spectral distribution density
 %       - ESD.THRE, the upper bound on the empirical spectral distribution
 %   * {MPMEDIAN} is the median of the Marcenko-Pastur distribution
-%   * A is the filtered matrix
-%   * SIGMA is an estimation of the noise standard deviation
-%   * P is the effective number of components preserved after filtering
 %   * AMSE is an estimate of the asymptotic mean squared error of the 
 %estimation
 %   * AMSS is an estimate of the mean square of the signal
+%   * A is the filtered matrix
+%   * SIGMA is an estimation of the noise standard deviation
+%   * P is the effective number of components preserved after filtering
 %   * SV are the observed singular values (generally returned only for 
 %visualization purposes)
 %   * NSV are the estimated singular values (generally returned only for 
@@ -44,16 +44,25 @@ if nargin<3 || isempty(noiEstMeth);noiEstMeth='None';end
 if nargin<4;esd=[];end
 if nargin<5;MPmedian=[];end
 
+%A=double(A);
+
 assert(numDims(A)<=3,'Number of dimensions has to be equal or lower than 3 and it is %d',numDims(A));
 [M,N,O]=size(A);beta=M/N;
-assert(beta<=1,'Shrinkage assumes M<=N (horizontal matrices) and size is %dx%d',M,N);
+%assert(beta<=1,'Shrinkage assumes M<=N (horizontal matrices) and size is %dx%d',M,N);
 comp=~isreal(A(1));
 gpu=isa(A,'gpuArray');
 
 %SV DECOMPOSITION
-[U,E,V]=svdm(A/sqrt(N*(1+comp)));
-sv=abs(diagm(E));%Singular values
-sv(sv<1e-6)=1e-6;
+if M>N
+    A=matfun(@ctranspose,A);
+    beta=N/M;
+end
+if nargout>=3
+    [sv,U,V]=svdm(A/sqrt(max(M,N)*(1+comp)));
+else
+    sv=svdm(A/sqrt(max(M,N)*(1+comp)));
+end
+sv=double(sv);
 
 %NOISE ESTIMATION
 if strcmp(shrinkMeth,'Exp1');noiEstMeth='Exp1';end%Forced, as they are linked
@@ -66,7 +75,7 @@ elseif strcmp(noiEstMeth,'Medi')%This uses the code provided in Gavish17
     if isempty(MPmedian);MPmedian=percMarcenkoPastur(beta);end
     sigma = median(sv,2)/sqrt(MPmedian);
 elseif strcmp(noiEstMeth,'None')
-    sigma=single(ones([1 1 O]));
+    sigma=ones([1 1 O]);
     if gpu;sigma=gpuArray(sigma);end
 else
     error('Unsupported noise estimation method: %s',noiEstMeth);
@@ -80,7 +89,10 @@ if ~ismember(shrinkMeth,{'Exp1','Exp2'})
     else
         [nsv,amse]=generalShrinkage(sv,beta,shrinkMeth,esd);
     end    
-    P=sum(nsv~=0,2);%Rank estimation as the number of components that emerge from the bulk        
+    P=sum(nsv~=0,2);%Rank estimation as the number of components that emerge from the bulk  
+    %figure
+    %plot(log(nsv(1:P)))
+    %pause
     if ~isempty(esd)
         sv=bsxfun(@times,sv,sigma);
         nsv=bsxfun(@times,nsv,sigma);
@@ -99,9 +111,14 @@ if isempty(esd)
 end
 amss=sum(abs(nsv).^2,2);
 
-%SV SYNTHESIS
-nE=diagm(nsv);
-nE=nE*sqrt(N*(1+comp));
-amse=amse*(1+comp)/M;
-amss=amss*(1+comp)/M;
-A=matfun(@mtimes,matfun(@mtimes,U,nE),matfun(@ctranspose,V));
+%%SV SYNTHESIS
+amse=amse*(1+comp)/min(M,N);
+amss=amss*(1+comp)/min(M,N);
+if nargout>=3    
+    nE=single(nsv);    
+    nE=nE*sqrt(max(M,N)*(1+comp));
+    A=matfun(@mtimes,bsxfun(@times,U,nE),matfun(@ctranspose,V));
+    if M>N;A=matfun(@ctranspose,A);end    
+end
+
+[sigma,P,amse,amss,sv,nsv]=parUnaFun({sigma,P,amse,amss,sv,nsv},@single);
